@@ -59,8 +59,8 @@ struct hash {
 	size_t elem_cnt;            /* Number of elements in table. */
 	size_t bucket_cnt;          /* Number of buckets, a power of 2. */
 	struct list *buckets;       /* Array of `bucket_cnt' lists. */
-	hash_hash_func *hash;       /* Hash function. */
-	hash_less_func *less;       /* Comparison function. */
+	hash_hash_func *hash;       /* Hash function. 키값넣어서? 벨류반환*/
+	hash_less_func *less;       /* Comparison function. 비교?*/
 	void *aux;                  /* Auxiliary data for `hash' and `less'. */
 };
 
