@@ -10,7 +10,7 @@
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
-unsigned page_hash(const struct hash_elem *, void *aux);
+uint64_t page_hash(const struct hash_elem *, void *aux);
 bool page_less(const struct hash_elem *, const struct hash_elem *, void *aux);
 
 void page_destory(struct hash_elem *e, void *aux);
@@ -59,10 +59,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		struct page *new_page = malloc(sizeof(struct page));
+		bool(*initializer)(struct page *, enum vm_type, void *)=NULL;
 		
 		if (new_page==NULL) return false;
-		
-		bool(*initializer)(struct page *, enum vm_type, void *)=NULL;
 
 		switch(VM_TYPE(type)){
 			case VM_ANON:
@@ -71,18 +70,18 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			case VM_FILE:
 				initializer = file_backed_initializer;
 				break;
-			// default:
-			// 	free(new_page);
-			// 	return false;
+			default:
+				free(new_page);
+				return false;
 		}
 		/* TODO: Insert the page into the spt. */
 		uninit_new(new_page,upage,init,type,aux,initializer);
 		new_page->writable=writable;
-		// if(!spt_insert_page(spt,new_page)){
-		// 	free(new_page);
-		// 	return false;
-		// }
-		return spt_insert_page(spt,new_page);
+		if(!spt_insert_page(spt,new_page)){
+			//free(new_page);
+			return false;
+		}
+		return true;
 	}
 err:
 	//printf("페이지가 이미 있다.");
@@ -133,7 +132,7 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
+	struct frame *victim = malloc(sizeof(struct frame));
 	 /* TODO: The policy for eviction is up to you. */
 
 	return victim;
@@ -195,10 +194,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if(addr == NULL || is_kernel_vaddr(addr)) return false;//접근 유효성 체크
 	/* TODO: Your code goes here */
 	
-	if(page==NULL){
-		void *rsp=f->rsp;
+	if (page == NULL)
+	{
+		// printf("페이지 예약정보 없음\n");
+		sys_exit(-1);
 		return false;
-		}
+	}
+
 	
 
 	return vm_do_claim_page (page);
@@ -270,7 +272,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	
 	hash_destroy(&spt->spt,page_destory);
 }
-unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
+uint64_t page_hash(const struct hash_elem *p_, void *aux UNUSED){
 	const struct page *p = hash_entry(p_,struct page, hash_elem);
 	return hash_bytes(&p->va,sizeof p->va);//왜?
 }

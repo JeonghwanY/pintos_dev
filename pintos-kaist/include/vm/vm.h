@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
 #include "threads/synch.h"
+
 enum vm_type {
 	/* page not initialized 아직 초기화되지 않은 페이지*/
 	VM_UNINIT = 0,
@@ -47,8 +48,7 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-	struct hash_elem hash_elem;
-	bool writable;
+	
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -59,12 +59,15 @@ struct page {
 		struct page_cache page_cache;
 #endif
 	};
+	struct hash_elem hash_elem;
+	bool writable;
 };
 
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -112,5 +115,11 @@ bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
+bool
+page_less (const struct hash_elem *a_,
+           const struct hash_elem *b_, void *aux UNUSED);
+
+uint64_t
+page_hash (const struct hash_elem *p_, void *aux UNUSED);
 
 #endif  /* VM_VM_H */
