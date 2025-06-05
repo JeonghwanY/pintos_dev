@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "../include/userprog/exception.h"
+#include "../include/threads/vaddr.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -296,8 +297,25 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	// dst (자식) , src (부모)
 	// 복사하는 방식은 uninit 페이지 확보한 뒤, 바로 claim
 	// claim의 의미; 물리페이지 할당 -> 프로세스의 페이지 테이블에 가상주소 <-> 할당한 물리프레임 매핑.
-
-
+	struct hash_iterator i;
+	hash_first(&i,&src->s_pt);
+	while (hash_next(&i)) {
+		struct page *src_page = hash_entry(hash_cur(&i),struct page,hash_elem);
+		enum vm_type type=src_page->operations->type;
+		void *upage = src_page->va;
+		bool writable = src_page->writable;
+		if(type == VM_UNINIT){
+			vm_initializer * init = src_page->uninit.init;
+			void *aux = src_page->uninit.aux;
+			vm_alloc_page_with_initializer(VM_ANON, upage,writable,init,aux);
+			continue;
+		}
+		if(!vm_alloc_page(type,upage,writable)) return false;
+		if(!vm_claim_page(upage)) return false;
+		struct page *dst_page=spt_find_page(dst,upage);
+		memcpy(dst_page->frame->kva,src_page->frame->kva, PGSIZE);
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
