@@ -291,30 +291,77 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 
 /* Copy supplemental page table from src to dst */
 // 초기화 관련 함수들(예: 새로운 페이지 엔트리를 위한 uninit 페이지 할당, SPT를 초기화하는 함수 등)을 재사용
+// bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
+// 								  struct supplemental_page_table *src UNUSED)
+// {
+// 	// dst (자식) , src (부모)
+// 	// 복사하는 방식은 uninit 페이지 확보한 뒤, 바로 claim
+// 	// claim의 의미; 물리페이지 할당 -> 프로세스의 페이지 테이블에 가상주소 <-> 할당한 물리프레임 매핑.
+// 	struct hash_iterator i;
+// 	hash_first(&i,&src->s_pt);
+// 	while (hash_next(&i)) {
+// 		struct page *src_page = hash_entry(hash_cur(&i),struct page,hash_elem);
+// 		enum vm_type type=src_page->operations->type;
+// 		void *upage = src_page->va;
+// 		bool writable = src_page->writable;
+// 		if(type == VM_UNINIT){
+// 			vm_initializer * init = src_page->uninit.init;
+// 			void *aux = src_page->uninit.aux;
+// 			vm_alloc_page_with_initializer(VM_ANON, upage,writable,init,aux);
+// 			continue;
+// 		}
+// 		if(!vm_alloc_page(type,upage,writable)) return false;
+// 		if(!vm_claim_page(upage)) return false;
+// 		struct page *dst_page=spt_find_page(dst,upage);
+// 		memcpy(dst_page->frame->kva,src_page->frame->kva, PGSIZE);
+// 	}
+// 	return true;
+// }
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
 	// dst (자식) , src (부모)
 	// 복사하는 방식은 uninit 페이지 확보한 뒤, 바로 claim
 	// claim의 의미; 물리페이지 할당 -> 프로세스의 페이지 테이블에 가상주소 <-> 할당한 물리프레임 매핑.
+
 	struct hash_iterator i;
-	hash_first(&i,&src->s_pt);
-	while (hash_next(&i)) {
-		struct page *src_page = hash_entry(hash_cur(&i),struct page,hash_elem);
-		enum vm_type type=src_page->operations->type;
-		void *upage = src_page->va;
-		bool writable = src_page->writable;
-		if(type == VM_UNINIT){
-			vm_initializer * init = src_page->uninit.init;
-			void *aux = src_page->uninit.aux;
-			vm_alloc_page_with_initializer(VM_ANON, upage,writable,init,aux);
-			continue;
+	hash_first(&i, src);
+	/*
+	enum vm_type type = page_get_type(src_page);
+	얘는 uninit페이지가 향후 어떤 페이지로 초기화될지에 대한 정보
+	*/
+
+	while (hash_next(&i))
+	{
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		enum vm_type type = src_page->operations->type;
+
+		switch (type)
+		{
+		case VM_UNINIT:
+			if (!vm_alloc_page_with_initializer(src_page->uninit.type, src_page->va, src_page->writable, src_page->uninit.init, src_page->uninit.aux))
+			{
+				return false;
+			}
+			break;
+
+		default:
+			if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
+			{
+				return false;
+			}
+
+			if (!vm_claim_page(src_page->va))
+			{
+				return false;
+			}
+			// memcpy 안쓰려고 했는데, 메모리에서 SPT를 통해 load하는 방식은 부모의 메모리상태를 반영하지 못해서 정확한 값 복사가안됨.
+			struct page *dst_page = spt_find_page(dst, src_page->va);
+			memcpy(dst_page->frame->kva, src_page->frame->kva, 1 << 12);
+			break;
 		}
-		if(!vm_alloc_page(type,upage,writable)) return false;
-		if(!vm_claim_page(upage)) return false;
-		struct page *dst_page=spt_find_page(dst,upage);
-		memcpy(dst_page->frame->kva,src_page->frame->kva, PGSIZE);
 	}
+
 	return true;
 }
 
