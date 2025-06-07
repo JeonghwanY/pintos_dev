@@ -801,7 +801,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 
 	memset(page->frame->kva + (aux_->page_read_bytes), 0, aux_->page_zero_bytes);
-	free(aux_);
+	//free(aux_);
 
 	return true;
 
@@ -884,6 +884,9 @@ setup_stack (struct intr_frame *if_) {
 		return success;
 	}
 	if_->rsp = USER_STACK;
+	ASSERT (pml4_get_page(t->pml4, if_->rsp - 8) != NULL);
+	//ASSERT (pg_round_down(if_->rsp) == stack_bottom);
+	//why? 
 	success = true;
 	//printf("stk bot: %p\n", stack_bottom);
 	t->stack_bot = (uintptr_t) stack_bottom;
